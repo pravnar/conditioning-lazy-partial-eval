@@ -1,5 +1,11 @@
 #lang racket
 
+(provide atomic?
+         head-normal?
+         heap-bound?
+         fwdExec
+         fwdEval)
+
 (define (atomic? expr h)
   (match expr
     [(or `(neg ,a)
@@ -7,21 +13,33 @@
          `(exp ,a)
          `(log ,a)
          `(fst ,a)
-         `(snd ,a)) (atomic? a)]
+         `(snd ,a)) (atomic? a h)]
     [(or `(plus ,a ,n)
          `(plus ,n ,a)
          `(times ,a ,n)
          `(times ,n ,a)
          `(less ,a ,n)
          `(less ,n ,a))
-     (and (head-normal? n) (atomic? a))]
+     (and (head-normal? n) (atomic? a h))]
     [x (not (heap-bound? x h))]))
 
-;; TODO
-(define (head-normal? n) #t)
+(define (head-normal? n h)
+  (match n
+    [(or (? real? _)
+         'unit
+         `(pair _ _)
+         `(inl _)
+         `(inr _)
+         'lebesgue
+         `(return _)
+         `(let _ _ _)
+         `(bind _ _)
+         'mzero
+         `(mplus _ _)) #t]
+    [a (atomic? a h)]))
 
 ;; TODO
-(define (heap-bound? x h) #t)
+(define (heap-bound? x h) #f)
 
 (define (fwdExec expr c h)
   (match expr    
@@ -37,14 +55,8 @@
     ))
 
 (define (fwdEval expr c h)
-  ;; (match expr )
-  ;; TODO
-  expr)
-
-;; ----------------------------------------------------------------------------
-;; tests
-
-(fwdExec 'lebesgue (lambda (x) x) 5)
-(fwdExec '(return lebesgue) 7 7)
-(fwdExec '(let inl (5 or 6) (lambda (y) lebesgue)) (lambda (x) x) '())
-(fwdExec '(bind lebesgue (lambda (y) (return lebesgue))) (lambda (x) x) '())
+  (match expr
+    [`(fst ,e) #:when (not (atomic? e)) (fwdEval e (lambda (n) (fwdEval (car n) c)) h)]
+    [`(snd ,e) #:when (not (atomic? e)) (fwdEval e (lambda (n) (fwdEval (cdr n) c)) h)]
+    
+    ))
